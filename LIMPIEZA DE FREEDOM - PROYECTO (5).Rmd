@@ -1,0 +1,412 @@
+```{r}
+library(rio)
+HFIlink="https://github.com/mariavenero99/mariavenero99/raw/master/human-freedom-index-2018-data-tables-figures.xlsx"
+HFIdata=import(HFIlink, skip=4) 
+```
+
+```{r}
+HFIdata[,-c(3,8:10,12,22,28,36:38,40,41,44,47,50,52,54,56:60,62,65,68,69,85:93)]=NULL
+```
+
+
+```{r}
+str(HFIdata)
+```
+
+```{r}
+names(HFIdata)=c("country","proceduraljustice","civiljustice","criminaljustice","homicide","disconterr","womenss","estopreligious","haphyhosti", "legalregures", "association", "assembly", "estoppp", "estoppo", "estopedu", "presskill","pressjail","lawsregmed", "polpressmed", "accesscable", "accessfornews", "statecontint", "legalgender", "parentrights", "samesexrel", "divorce", "judicialind", "impartialcourts", "pprights","militaryinter","integrityleg","enforcontract","restrprop","reliapol", "busicostcrime")
+```
+
+
+```{r}
+HFIdata[,]=lapply(HFIdata[,], trimws, whitespace = "[\\h\\v]")
+HFIdata=HFIdata[-c(163:1458),]
+tail(HFIdata)
+```
+
+```{r}
+HFIdata[,c(2:35)]=lapply(HFIdata[,c(2:35)],as.numeric)
+```
+
+
+```{r}
+str(HFIdata)
+tail(HFIdata)
+```
+
+}
+#AHORA DEMOCRACY INDEX
+```{r}
+library(rio)
+```
+
+
+```{r}
+DEM="https://github.com/mariavenero99/mariavenero99/raw/master/DEMOCRACY%20INDEX%202016.xlsx"
+DEMOINDEX=import(DEM)
+```
+
+```{r}
+DEMOINDEX[,]=lapply(DEMOINDEX[,], trimws, whitespace = "[\\h\\v]")
+DEMOINDEX[,c(2:3)]=lapply(DEMOINDEX[,c(2:3)],as.numeric)
+
+str(DEMOINDEX)
+```
+
+```{r}
+DEMOFREE=merge(DEMOINDEX,HFIdata,by.x='country', by.y='country') 
+row.names(DEMOFREE)=DEMOFREE$country
+DEMOFREE[,c(1)]=NULL
+```
+
+```{r}
+str(DEMOFREE)
+```
+
+
+
+#INDICES
+```{r}
+model <- ' estadodederecho  =~ proceduraljustice + civiljustice + criminaljustice
+
+identidadrelaciones =~ legalgender +  parentrights + samesexrel + divorce
+
+securitysafety =~ homicide + disconterr + womenss
+
+religion =~ estopreligious + haphyhosti + legalregures
+
+associaassembly =~ association + assembly + estoppp + estoppo + estopedu
+
+expressinfo  =~ presskill + pressjail + lawsregmed + polpressmed + accesscable + accessfornews + statecontint 
+
+legalsysproper  =~  judicialind + impartialcourts + pprights + militaryinter + integrityleg + enforcontract +  restrprop +  reliapol + busicostcrime'
+```
+
+
+
+```{r}
+
+# normalizar las variables:
+DEMOFREE=scale(DEMOFREE[1:36])
+
+library(lavaan)
+```
+
+```{r}
+cfa_fit <- cfa(model, data=DEMOFREE, 
+           std.lv=TRUE,  
+           missing="fiml")
+```
+
+#AÑADIMOS LOS INDICES A LA DATA
+
+```{r}
+DEMOFREE=as.data.frame(cbind(DEMOFREE,lavPredict(cfa_fit)))
+```
+
+
+
+```{r}
+str(DEMOFREE)
+```
+
+#CODIGOS DE REGRESION LINEAL
+```{r}
+modelo1 = formula(scoredemo~estadodederecho)
+modelo2 = formula(scoredemo~ identidadrelaciones)
+modelo3 = formula(scoredemo~  securitysafety)
+modelo4 = formula(scoredemo ~ associaassembly)
+modelo5 = formula(scoredemo ~  expressinfo)
+modelo6 = formula(scoredemo ~  legalsysproper)
+modelo7 = formula(scoredemo ~  politicalculture)
+```
+
+#CODIGOS DE REGRESIONES MULTIPLES
+```{r}
+MODELOA = formula(scoredemo~estadodederecho + identidadrelaciones)
+MODELOB = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety)
+MODELOC = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly)
+MODELOD = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo)
+MODELOE = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo + legalsysproper)
+MODELOF = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo + legalsysproper + politicalculture)
+```
+
+#REGRESIONES 
+#CON ESTADO DE DERECHO 
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg1=lm(modelo1,data=DEMOFREE)
+stargazer(reg1,type = "text",intercept.bottom = FALSE)
+```
+
+```{r}
+library(ggplot2)
+ggplot(DEMOFREE, aes(x=estadodederecho, y=scoredemo)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+```
+
+#CON IDENTIDAD Y RELAICONES 
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg2=lm(modelo2,data=DEMOFREE)
+stargazer(reg2,type = "text",intercept.bottom = FALSE)
+```
+
+```{r}
+ggplot(DEMOFREE, aes(x=identidadrelaciones, y=scoredemo)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+```
+
+#CON SECURITY AND SAFETY
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg3=lm(modelo3,data=DEMOFREE)
+stargazer(reg3,type = "text",intercept.bottom = FALSE)
+```
+
+```{r}
+ggplot(DEMOFREE, aes(x=securitysafety, y=scoredemo)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+```
+
+#CON ASSOCIATION AND ASSEMBLY
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg4=lm(modelo4,data=DEMOFREE)
+stargazer(reg4,type = "text",intercept.bottom = FALSE)
+```
+
+```{r}
+ggplot(DEMOFREE, aes(x=associaassembly, y=scoredemo)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+```
+#CON EXPRESSION AND INFORMATION 
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg5=lm(modelo5,data=DEMOFREE)
+stargazer(reg5,type = "text",intercept.bottom = FALSE)
+```
+
+```{r}
+ggplot(DEMOFREE, aes(x=expressinfo, y=scoredemo)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+```
+#CON LAWS OF PROPERTY 
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg6=lm(modelo6,data=DEMOFREE)
+stargazer(reg6,type = "text",intercept.bottom = FALSE)
+```
+```{r}
+ggplot(DEMOFREE, aes(x=legalsysproper, y=scoredemo)) + 
+  geom_point()+
+  geom_smooth(method=lm)
+```
+
+#CON POLITICAL CULTURE 
+
+```{r, results='asis'}
+set.seed(2019)
+library(stargazer)
+reg7=lm(modelo7,data=DEMOFREE)
+stargazer(reg7,type = "text",intercept.bottom = FALSE)
+```
+
+
+#REGRESIONES MULTIPLES 
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES 
+```{r, results='asis'}
+regA=lm(MODELOA,data=DEMOFREE)
+stargazer(regA,type = "text",intercept.bottom = FALSE)
+```
+```{r}
+library(scatterplot3d)
+G  <- scatterplot3d(DEMOFREE[,c('estadodederecho','identidadrelaciones','scoredemo')])
+G$plane3d(regA, draw_polygon = TRUE, draw_lines = FALSE)
+```
+
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELAICONES + SECURITY AND SAFETY
+```{r, results='asis'}
+regB=lm(MODELOB,data=DEMOFREE)
+stargazer(regB,type = "text",intercept.bottom = FALSE)
+```
+
+# CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY
+```{r, results='asis'}
+regC=lm(MODELOC,data=DEMOFREE)
+stargazer(regC,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY + EXPRESSION AND INFORMATION
+```{r, results='asis'}
+regD=lm(MODELOD,data=DEMOFREE)
+stargazer(regD,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY + EXPRESSION AND INFORMATION + LAWS OF PROPERTY
+```{r, results='asis'}
+library(stargazer)
+regE=lm(MODELOE,data=DEMOFREE)
+stargazer(regE,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY + EXPRESSION AND INFORMATION + LAWS OF PROPERTY + POLITICAL CULTURE
+```{r, results='asis'}
+library(stargazer)
+regF=lm(MODELOF,data=DEMOFREE)
+stargazer(regF,type = "text",intercept.bottom = FALSE)
+```
+
+#CUADRO RESUMEN DE LA REGRESION 
+
+```{r, results='asis'}
+library(stargazer)
+stargazer(regA,regB,regC,regD, regE, regF, type = "text", title = "Modelos planteados",digits = 2, single.row = F,no.space = F,intercept.bottom = FALSE,
+          dep.var.caption="Variable dependiente:",
+          dep.var.labels="Calidad de la democracia",
+          covariate.labels=c("Constante","estadodederecho","identidadrelaciones","securitysafety", "associaassembly", "expressinfo", "legalsysproper","politicalculture"),
+          keep.stat = c("n","adj.rsq","ser"),df = F,
+          notes.label = "Notas:")
+
+```
+
+
+```{r}
+MODELOG = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + politicalculture)
+MODELOH = formula(scoredemo~ identidadrelaciones + securitysafety + associaassembly + legalsysproper + politicalculture)
+```
+
+#SIN LEGAL Y PROPER
+```{r, results='asis'}
+library(stargazer)
+regG=lm(MODELOG,data=DEMOFREE)
+stargazer(regG,type = "text",intercept.bottom = FALSE)
+```
+
+
+#SIN ESTADO DE DERECHO 
+```{r, results='asis'}
+library(stargazer)
+regH=lm(MODELOH,data=DEMOFREE)
+stargazer(regH,type = "text",intercept.bottom = FALSE)
+```
+
+
+
+#CON ESTADO DE DEREHO 
+```{r, results='asis'}
+library(stargazer)
+stargazer(regA,regB,regC,regD, regE, regG, type = "text", title = "Modelos planteados",digits = 2, single.row = F,no.space = F,intercept.bottom = FALSE,
+          dep.var.caption="Variable dependiente:",
+          dep.var.labels="Calidad de la democracia",
+          covariate.labels=c("Constante","estadodederecho","identidadrelaciones","securitysafety", "associaassembly", "expressinfo", "legalsysproper","politicalculture"),
+          keep.stat = c("n","adj.rsq","ser"),df = F,
+          notes.label = "Notas:")
+```
+
+#SOLO CON PROPERTY RIGHTS 
+```{r, results='asis'}
+library(stargazer)
+stargazer(regA,regB,regC,regD, regE, regH, type = "text", title = "Modelos planteados",digits = 2, single.row = F,no.space = F,intercept.bottom = FALSE,
+          dep.var.caption="Variable dependiente:",
+          dep.var.labels="Calidad de la democracia",
+          covariate.labels=c("Constante","estadodederecho","identidadrelaciones","securitysafety", "associaassembly", "expressinfo", "legalsysproper","politicalculture"),
+          keep.stat = c("n","adj.rsq","ser"),df = F,
+          notes.label = "Notas:")
+```
+
+
+#CON ESTADO DE DERECHO Y EXPRESSION AND INFORMATION 
+```{r}
+MODELOI = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo)
+```
+
+```{r, results='asis'}
+library(stargazer)
+regI=lm(MODELOI,data=DEMOFREE)
+stargazer(regI,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DEREHO 
+```{r, results='asis'}
+library(stargazer)
+stargazer(regA,regB,regC,regD, regE, regF, regG, regH, regI, type = "text", title = "Modelos planteados",digits = 2, single.row = F,no.space = F,intercept.bottom = FALSE,
+          dep.var.caption="Variable dependiente:",
+          dep.var.labels="Calidad de la democracia",
+          covariate.labels=c("Constante","estadodederecho","identidadrelaciones","securitysafety", "associaassembly", "expressinfo", "legalsysproper","politicalculture"),
+          keep.stat = c("n","adj.rsq","ser"),df = F,
+          notes.label = "Notas:")
+```
+
+
+#PRUEBAS DEL MODELO G: EL MEJOR 
+
+#LINEALIDAD 
+```{r}
+plot(regG, 1)
+```
+
+#HOMOCEDASTICIDAD 
+
+```{r}
+plot(regG, 3)
+```
+
+```{r}
+library(lmtest)
+# null: modelo homocedastico
+bptest(regG)
+```
+
+#LA PROBABILIDAD DE HOMOCEDATSICIDAD ES MUY BAJA (P.VALUE MENOR A 0.05)
+
+
+#NORMALIDAD DE LOS RESIDUOS 
+```{r}
+# puntos cerca a la diagonal
+plot(regG, 2)
+```
+
+#QUE NOS DICE EL SHAPIRO-WILK 
+```{r}
+shapiro.test(regG$residuals)
+```
+
+#NO MULTICONEALIDAD --> ESTE ES EL MODELO CON EL QUE NOS VAMOS A QUEDAR 
+```{r}
+library(DescTools)
+VIF(regG) # > 5 es problematico
+```
+
+
+#VALORES INFLUYENTES 
+```{r}
+plot(regG, 5)
+```
+
+#RECUPEREMOS LOS CASOS INFLUYENTES 
+
+```{r}
+checkRegG=as.data.frame(influence.measures(regG)$is.inf)
+head(checkRegG)
+```
+
+#PRESTEMOS ATENCION AL INDICE DE COOK Y LOS VALORES PREDECIDOS 
+```{r}
+checkRegG[checkRegG$cook.d | checkRegG$hat,]
+```
+
+
+
