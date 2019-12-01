@@ -1,0 +1,180 @@
+```{r}
+library(rio)
+HFIlink="https://github.com/mariavenero99/mariavenero99/raw/master/human-freedom-index-2018-data-tables-figures.xlsx"
+HFIdata=import(HFIlink, skip=4) 
+```
+
+```{r}
+HFIdata[,-c(3,8:10,12,22,28,36:38,40,41,44,47,50,52,54,56:60,62,65,68,69,85:93)]=NULL
+```
+
+
+```{r}
+str(HFIdata)
+```
+
+```{r}
+names(HFIdata)=c("country","proceduraljustice","civiljustice","criminaljustice","homicide","disconterr","womenss","estopreligious","haphyhosti", "legalregures", "association", "assembly", "estoppp", "estoppo", "estopedu", "presskill","pressjail","lawsregmed", "polpressmed", "accesscable", "accessfornews", "statecontint", "legalgender", "parentrights", "samesexrel", "divorce", "judicialind", "impartialcourts", "pprights","militaryinter","integrityleg","enforcontract","restrprop","reliapol", "busicostcrime")
+```
+
+
+```{r}
+HFIdata[,]=lapply(HFIdata[,], trimws, whitespace = "[\\h\\v]")
+HFIdata=HFIdata[-c(163:1458),]
+tail(HFIdata)
+```
+
+```{r}
+HFIdata[,c(2:35)]=lapply(HFIdata[,c(2:35)],as.numeric)
+```
+
+
+```{r}
+str(HFIdata)
+tail(HFIdata)
+```
+
+
+#AHORA DEMOCRACY INDEX
+```{r}
+library(rio)
+```
+
+
+```{r}
+DEM="https://github.com/mariavenero99/mariavenero99/raw/master/DEMOCRACY%20INDEX%202016.xlsx"
+DEMOINDEX=import(DEM)
+```
+
+```{r}
+DEMOINDEX[,]=lapply(DEMOINDEX[,], trimws, whitespace = "[\\h\\v]")
+DEMOINDEX[,c(2:3)]=lapply(DEMOINDEX[,c(2:3)],as.numeric)
+
+str(DEMOINDEX)
+```
+
+```{r}
+DEMOFREE=merge(DEMOINDEX,HFIdata,by.x='country', by.y='country') 
+row.names(DEMOFREE)=DEMOFREE$country
+DEMOFREE[,c(1)]=NULL
+```
+
+```{r}
+str(DEMOFREE)
+```
+
+
+
+#INDICES
+```{r}
+model <- ' estadodederecho  =~ proceduraljustice + civiljustice + criminaljustice
+
+identidadrelaciones =~ legalgender +  parentrights + samesexrel + divorce
+
+securitysafety =~ homicide + disconterr + womenss
+
+religion =~ estopreligious + haphyhosti + legalregures
+
+associaassembly =~ association + assembly + estoppp + estoppo + estopedu
+
+expressinfo  =~ presskill + pressjail + lawsregmed + polpressmed + accesscable + accessfornews + statecontint 
+
+legalsysproper  =~  judicialind + impartialcourts + pprights + militaryinter + integrityleg + enforcontract +  restrprop +  reliapol + busicostcrime'
+```
+
+
+
+```{r}
+
+# normalizar las variables:
+DEMOFREE=scale(DEMOFREE[1:36])
+
+library(lavaan)
+```
+
+```{r}
+cfa_fit <- cfa(model, data=DEMOFREE, 
+           std.lv=TRUE,  
+           missing="fiml")
+```
+
+#AÑADIMOS LOS INDICES A LA DATA
+
+```{r}
+DEMOFREE=as.data.frame(cbind(DEMOFREE,lavPredict(cfa_fit)))
+```
+
+```{r}
+str(DEMOFREE)
+```
+```{r}
+theData=DEMOFREE[,-c(1,2,9,10,11,37,38,39,40,41,42,43)] 
+
+# sin los indices ni la variable dependiente
+```
+
+```{r}
+# esta es:
+library(polycor)
+corMatrix=polycor::hetcor(theData)$correlations
+```
+
+```{r}
+library(ggcorrplot)
+ggcorrplot(corMatrix)
+
+ggcorrplot(corMatrix,p.mat = cor_pmat(corMatrix),insig = "blank")
+```
+
+```{r}
+library(psych)
+psych::KMO(corMatrix)
+```
+
+```{r}
+cortest.bartlett(corMatrix,n=nrow(theData))$p.value>0.05 
+```
+```{r}
+library(matrixcalc)
+is.singular.matrix(corMatrix)
+```
+```{r}
+fa.parallel(theData,fm = 'minres', fa = 'fa') 
+```
+
+```{r}
+library(GPArotation)
+resfa <- fa(theData,nfactors = 6,rotate = "varimax",fm="pa")
+```
+
+```{r}
+print(resfa$loadings,cutoff = 0.51)  
+```
+
+```{r}
+fa.diagram(resfa) 
+```
+
+```{r}
+resfa$crms 
+```
+```{r}
+resfa$RMSEA 
+```
+```{r}
+resfa$TLI 
+```
+```{r}
+sort(resfa$communality)
+```
+```{r}
+sort(resfa$complexity) 
+```
+```{r}
+as.data.frame(resfa$scores)
+
+```
+```{r}
+theDataFA=cbind(theData[1],as.data.frame(resfa$scores))
+```
+
