@@ -1,0 +1,551 @@
+
+
+#PRIMERO DEBEMOS LLAMAR LA BASE DE DATOS A UTILIZAR, EN ESTE CASO LLAMAMOS LA DATA DEL HUMAN FREEDOM INDEX 
+```{r}
+library(rio)
+HFIlink="https://github.com/mariavenero99/mariavenero99/raw/master/human-freedom-index-2018-data-tables-figures.xlsx"
+HFIdata=import(HFIlink, skip=4) 
+```
+
+#AHORA PORCEDEMOS A LA LIMPIEZA DE ESTA DATA 
+```{r}
+HFIdata[,-c(3,8:10,12,22,28,36:38,40,41,44,47,50,52,54,56:60,62,65,68,69,85:93)]=NULL
+```
+
+```{r}
+str(HFIdata)
+```
+
+#LE CAMBIAMOS DE NOMBRE A CADA VARIABLE 
+```{r}
+names(HFIdata)=c("country","proceduraljustice","civiljustice","criminaljustice","homicide","disconterr","womenss","estopreligious","haphyhosti", "legalregures", "association", "assembly", "estoppp", "estoppo", "estopedu", "presskill","pressjail","lawsregmed", "polpressmed", "accesscable", "accessfornews", "statecontint", "legalgender", "parentrights", "samesexrel", "divorce", "judicialind", "impartialcourts", "pprights","militaryinter","integrityleg","enforcontract","restrprop","reliapol", "busicostcrime")
+```
+
+```{r}
+HFIdata[,]=lapply(HFIdata[,], trimws, whitespace = "[\\h\\v]")
+HFIdata=HFIdata[-c(163:1458),]
+tail(HFIdata)
+```
+
+```{r}
+HFIdata[,c(2:35)]=lapply(HFIdata[,c(2:35)],as.numeric)
+```
+
+```{r}
+str(HFIdata)
+tail(HFIdata)
+```
+
+
+#AHORA LLAMAMOS LA DATA DE DEMOCRACY INDEX
+```{r}
+library(rio)
+```
+
+```{r}
+DEM="https://github.com/mariavenero99/mariavenero99/raw/master/DEMOCRACY%20INDEX%202016.xlsx"
+DEMOINDEX=import(DEM)
+```
+
+#PROCEDEMOS A LIMPIAR LA DATA DE DEMOCRACY INDEX 
+```{r}
+DEMOINDEX[,]=lapply(DEMOINDEX[,], trimws, whitespace = "[\\h\\v]")
+DEMOINDEX[,c(2:3)]=lapply(DEMOINDEX[,c(2:3)],as.numeric)
+
+str(DEMOINDEX)
+```
+
+#AHORA PROCEDEMOS A MERGEAR EL HUMAN FREEDOM INDEX Y EL DEMOCRACY INDEX
+```{r}
+DEMOFREE=merge(DEMOINDEX,HFIdata,by.x='country', by.y='country') 
+row.names(DEMOFREE)=DEMOFREE$country
+DEMOFREE[,c(1)]=NULL
+```
+
+```{r}
+str(DEMOFREE)
+```
+
+```{r}
+summary(DEMOFREE$scoredemo)
+```
+
+#TRAS HABER REALIZADO LA LIMPIEZA DE LAS DATAS Y HABERLAS MERGEADO PODEMOS REALIZAR LOS INDICES PORPUETSOS POR EL MARCO TEORICO 
+```{r}
+model <- ' estadodederecho  =~ proceduraljustice + civiljustice + criminaljustice
+
+identidadrelaciones =~ legalgender +  parentrights + samesexrel + divorce
+
+securitysafety =~ homicide + disconterr + womenss
+
+religion =~ estopreligious + haphyhosti + legalregures
+
+associaassembly =~ association + assembly + estoppp + estoppo + estopedu
+
+expressinfo  =~ presskill + pressjail + lawsregmed + polpressmed + accesscable + accessfornews + statecontint 
+
+legalsysproper  =~  judicialind + impartialcourts + pprights + militaryinter + integrityleg + enforcontract +  restrprop +  reliapol + busicostcrime'
+```
+
+
+#PARA HACER EL CFA ES PRECISO NORMALIZAR LAS VARIABLES, DE MODO QUE AHORA LA MEDIA DE LAS VARIABLES PASA A SER 0 
+```{r}
+
+# normalizar las variables:
+DEMOFREE=scale(DEMOFREE[1:36])
+
+
+library(lavaan)
+```
+
+```{r}
+summary(DEMOFREE)
+```
+
+
+```{r}
+cfa_fit <- cfa(model, data=DEMOFREE, 
+           std.lv=TRUE,  
+           missing="fiml")
+```
+
+#AÑADIMOS LOS INDICES ELABORADOS A LA DATA
+
+```{r}
+DEMOFREE=as.data.frame(cbind(DEMOFREE,lavPredict(cfa_fit)))
+```
+
+```{r}
+str(DEMOFREE)
+```
+
+#AHORA PROCEDEREMOS A HACER EL ANALISIS FACTORIAL CONFIRMATIVO
+```{r}
+allParamCFA=parameterEstimates(cfa_fit,standardized = T)
+allFitCFA=as.list(fitMeasures(cfa_fit))
+```
+
+```{r}
+library(knitr)
+kable(allParamCFA[allParamCFA$op=="=~",])
+```
+
+#A TRAVES DE ESTO VEMOS QUE LAS VARIABLES TIENEN BUENA CONEXION CON SU LATENTE, MENOS:
+#-SECURITY - homicidio
+#-IDENTIDAD Y RELACIONES - legal gender
+
+
+#AHORA SE PORCEDE A EVALUAR EL MODELO PRODUCIDO POR EL CFA 
+
+#RPUEBA DE CHI
+```{r}
+allFitCFA[c("chisq", "df", "pvalue")] # pvalue>0.05
+```
+# A TRAVES DE ESTO SE DETERMINA QUE EL MODELO NO TIENE BUEN AJUSTE PORQUE EL PVALUE ES 0
+
+#PRUEBA DE TUCKER LEWIS 
+```{r}
+allFitCFA$tli # > 0.90
+```
+#TAMBIEN SE DETERMINA QUE NO TIENE BUEN AJUSTE PORQUE EL COEFICIENTE ES MENOR A 0.09
+
+
+#SE ELABORA EL RMSEA
+```{r}
+allFitCFA[c('rmsea.ci.lower','rmsea' ,'rmsea.ci.upper')] # 0.05 en el Int de Conf?
+```
+#SE DETERMINA QUE NO TIENE BUEN AJUTE PORQUE LA VARIANZA NO EXPLICADA ES MAYOR A 0.05
+
+
+#AHORA PORCEDEMOS A HACER EL ANALISIS FACTORIAL EXPLORIO PARA CONTRASTAR EL CFA -QUE SE HA BASADO EN EL MODELO TEORICO. CON EL EFA QUE SERA LO QUE "EN LA PRACTICA" NOS ARROJE EL PROGRAMA 
+#ASIMISMO, PARA ELABORAR EL EFA NO TOMAMOS EN CUENTA NI LOS INDICES NI LA VARIABLE DEPENDIENTE
+```{r}
+theData=DEMOFREE[,-c(1,2,9,10,11,37,38,39,40,41,42,43)] 
+```
+
+#AHORA PROCEDEMOS A CALCULAR LA MATRIZ DE CORRELACIÓN
+```{r}
+# esta es:
+library(polycor)
+corMatrix=polycor::hetcor(theData)$correlations
+```
+
+#PODEMOS EXPLORAR LAS CORRELACIONES  
+```{r}
+library(ggcorrplot)
+ggcorrplot(corMatrix)
+
+ggcorrplot(corMatrix,p.mat = cor_pmat(corMatrix),insig = "blank")
+```
+#A TARVES DE ETSOS GARFICOS PORMODE VER QUE SU HAY BLOQUES CORRELAIOCNADOS DE MODO QUE HAY ESPERANZA DE UN BUEN ANALISIS FACTORIAL 
+
+#AHORA VEMOS SI LOS DATOS PERMITEN FACTORIZAR
+```{r}
+library(psych)
+psych::KMO(corMatrix)
+```
+#EL KMO NOS ARROJA QUE SU HAY UNA MATRIZ DE CORRELACIÓN ADECUADA 
+
+#REALIZAMOS LAS PRUEBAS PERTINENTES 
+
+
+#PRUEBA DE MATRIZ DE IDENTIDAD 
+```{r}
+cortest.bartlett(corMatrix,n=nrow(theData))$p.value>0.05 
+```
+#LA PRUEBA NOS INDICA QUE NUETSRA MATRIZ DE CORRELACION NO ES UNA MATRIZ DE IDENTIDAD
+
+
+#PRUEBA DE MATRIZ SINGULAR 
+```{r}
+library(matrixcalc)
+is.singular.matrix(corMatrix)
+```
+#LA PRUBA NOS INDICA QUE LA MATRIZ DE CORRELACION ES UNA MATRIZ SINGULAR LO QUE PUEDE INDICAR QUE HABRAN PROBLEMAS EN EL EFA
+#NO BSTANTE CONTINUAMOS PUESTO QUE SOLO SE DESEA COMPARAR LO QUE NOS RECOMIENDE EL PROGRAMA -EL EFA- CON EL CFA BASADO EN EL MODELO TEORICO 
+
+#AHORA DETERMINAMOS EN CUANTOS FACTORES O VARIABLES LATENTES EL PROGRAMA NOS RECOMIENDA REDIMENSIONAR LA DATA 
+```{r}
+fa.parallel(theData,fm = 'minres', fa = 'fa') 
+```
+#NOS RECOMIENDA 3 FACTORES, NO OBSTANTE COMO SE DESEA CONTRATSAR CON EL MODELO TEORICO QUE PROPONE 6 LATENTES SE SEÑALARA QUE EL NUMERO DE FACTORES ES 6 
+
+```{r}
+library(GPArotation)
+resfa <- fa(theData,nfactors = 6,rotate = "varimax",fm="pa")
+```
+
+#VEMOS QUE VARIABLES PERTECEN A CADA VARIABLE
+```{r}
+print(resfa$loadings,cutoff = 0.51)  
+```
+
+#AQUI SE MUESTRA EN UN DIAGRAMA, PERO PUESTO QUE SON BASTANTES VARIABLES NO SE PUEDE OBSERVAR OPTIMAMENTE 
+```{r}
+fa.diagram(resfa) 
+```
+
+#AHORA EVALUAMOS EL RESULTADO OBTENIDO DEL EFA 
+
+#¿La Raíz del error cuadrático medio corregida está cerca a cero?
+```{r}
+resfa$crms 
+```
+#SI ESTA CERCA A 0
+
+#La Raíz del error cuadrático medio de aproximación es menor a 0.05?
+```{r}
+resfa$RMSEA 
+```
+#EL RMSEA NO ES MENOR A 0.05 
+
+#El índice de Tucker-Lewis es mayor a 0.9?
+```{r}
+resfa$TLI 
+```
+#EL INDICE DE TL NO ES MAYOR A 0.9
+
+
+#Que variables aportaron mas a los factores?
+```{r}
+sort(resfa$communality)
+```
+
+#Que variables contribuyen a mas de un factor?
+```{r}
+sort(resfa$complexity) 
+```
+
+#AHORA VEMOS LOS POSIBLES VALORES PROYECTADOS 
+```{r}
+as.data.frame(resfa$scores)
+
+```
+
+#ASI PODEMOS AÑADIR Y GUARDAR LOS SCORES A theData 
+```{r}
+theDataFA=cbind(theData[1],as.data.frame(resfa$scores))
+```
+
+#AHORA QUE YA TENEMOS LOS INDICES EN LA DATA PROCEDEMOS A REALIZAR NUESTRO MODELO DE REGRESIÓN 
+
+#CODIGOS DE REGRESIONES MULTIPLES
+```{r}
+MODELOA = formula(scoredemo~estadodederecho + identidadrelaciones)
+MODELOB = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety)
+MODELOC = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly)
+MODELOD = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo)
+MODELOE = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo + legalsysproper)
+MODELOF = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo + legalsysproper + politicalculture)
+```
+
+#CORREMOS LAS REGRESIONES MULTIPLES 
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES 
+```{r, results='asis'}
+regA=lm(MODELOA,data=DEMOFREE)
+stargazer(regA,type = "text",intercept.bottom = FALSE)
+```
+```{r}
+library(scatterplot3d)
+G  <- scatterplot3d(DEMOFREE[,c('estadodederecho','identidadrelaciones','scoredemo')])
+G$plane3d(regA, draw_polygon = TRUE, draw_lines = FALSE)
+```
+
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELAICONES + SECURITY AND SAFETY
+```{r, results='asis'}
+regB=lm(MODELOB,data=DEMOFREE)
+stargazer(regB,type = "text",intercept.bottom = FALSE)
+```
+
+# CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY
+```{r, results='asis'}
+regC=lm(MODELOC,data=DEMOFREE)
+stargazer(regC,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY + EXPRESSION AND INFORMATION
+```{r, results='asis'}
+regD=lm(MODELOD,data=DEMOFREE)
+stargazer(regD,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY + EXPRESSION AND INFORMATION + LAWS OF PROPERTY
+```{r, results='asis'}
+library(stargazer)
+regE=lm(MODELOE,data=DEMOFREE)
+stargazer(regE,type = "text",intercept.bottom = FALSE)
+```
+
+#CON ESTADO DE DERECHO + IDENTIDAD Y RELACIONES + SECURITY AND SAFETY + ASSOCIATION AND ASSEMBLY + EXPRESSION AND INFORMATION + LAWS OF PROPERTY + POLITICAL CULTURE
+```{r, results='asis'}
+library(stargazer)
+regF=lm(MODELOF,data=DEMOFREE)
+stargazer(regF,type = "text",intercept.bottom = FALSE)
+```
+
+#CUADRO RESUMEN DE LAS REGRESIONES 
+
+```{r, results='asis'}
+library(stargazer)
+stargazer(regA,regB,regC,regD, regE, regF, type = "text", title = "Modelos planteados",digits = 2, single.row = F,no.space = F,intercept.bottom = FALSE,
+          dep.var.caption="Variable dependiente:",
+          dep.var.labels="Calidad de la democracia",
+          covariate.labels=c("Constante","estadodederecho","identidadrelaciones","securitysafety", "associaassembly", "expressinfo", "legalsysproper","politicalculture"),
+          keep.stat = c("n","adj.rsq","ser"),df = F,
+          notes.label = "Notas:")
+
+```
+
+#A TRAVES DEL MODELO ANTERIOR DETECTAMOS VARIABLES ESPURIAS POR LO QUE SE PROPONEN 2 REGRESIONES MAS SIN LAS VARIABLES QUE RESULTAN SER ESPURIAS  
+```{r}
+MODELOG = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + politicalculture)
+MODELOH = formula(scoredemo~ identidadrelaciones + securitysafety + associaassembly + legalsysproper + politicalculture)
+```
+
+#EL MODELO G, SIN LEGAL Y PROPER
+```{r, results='asis'}
+library(stargazer)
+regG=lm(MODELOG,data=DEMOFREE)
+stargazer(regG,type = "text",intercept.bottom = FALSE)
+```
+
+#EL MODELO H, SIN ESTADO DE DERECHO 
+```{r, results='asis'}
+library(stargazer)
+regH=lm(MODELOH,data=DEMOFREE)
+stargazer(regH,type = "text",intercept.bottom = FALSE)
+```
+
+#SUMAMOS UN NUEVO MODELO, EL MODELO I: CON ESTADO DE DERECHO Y EXPRESSION AND INFORMATION 
+```{r}
+MODELOI = formula(scoredemo~estadodederecho + identidadrelaciones + securitysafety + associaassembly + expressinfo)
+```
+```{r, results='asis'}
+library(stargazer)
+regI=lm(MODELOI,data=DEMOFREE)
+stargazer(regI,type = "text",intercept.bottom = FALSE)
+```
+
+#NUEVAMENTE HACEMOS EL CUADRO RESUMEN AÑADIENDO LAS NUEVAS REGRESIONES 
+```{r, results='asis'}
+library(stargazer)
+stargazer(regA,regB,regC,regD, regE, regF, regG, regH, regI, type = "text", title = "Modelos planteados",digits = 2, single.row = F,no.space = F,intercept.bottom = FALSE,
+          dep.var.caption="Variable dependiente:",
+          dep.var.labels="Calidad de la democracia",
+          covariate.labels=c("Constante","estadodederecho","identidadrelaciones","securitysafety", "associaassembly", "expressinfo", "legalsysproper","politicalculture"),
+          keep.stat = c("n","adj.rsq","ser"),df = F,
+          notes.label = "Notas:")
+```
+
+#PARA DETERMINAR CUAL ES LA MEJOR REGRESIÓN ENTRE EL MODELO F Y EL MODELO G, QUE SON LOS QUE REDUCEN EN MAYOR MEDIDA EL ERROR RESIDUAL ESTANDAR Y MEJORAB EL R2 AJUSTADO, SE HACE ANOVA 
+```{r,results='asis'}
+tanova=anova(regF,regG)
+stargazer(tanova,type = 'text',summary = F,title = "Table de Análisis de Varianza")
+```
+#ANOVA NOS ARROJA QUE NO HAY UNA DIFERENCIA SIGNIFICATIVA ENTRE AMBOS MODELOS, NO OBSTANTE COMO LA REGRESION F CONTIENE VARIABLES ESPURIAS SE OPTA POR LA REGRESION G 
+
+#PRUEBAS DEL MODELO G: EL MEJOR 
+#LINEALIDAD 
+```{r}
+plot(regG, 1)
+```
+#VEMOS QUE EL MODELO SI TIENDE A LA LINEALIDAD 
+
+#HOMOCEDASTICIDAD 
+```{r}
+plot(regG, 3)
+```
+```{r}
+library(lmtest)
+# null: modelo homocedastico
+bptest(regG)
+```
+#LA PROBABILIDAD DE HOMOCEDATSICIDAD ES MUY BAJA (P.VALUE MENOR A 0.05)
+
+
+#NORMALIDAD DE LOS RESIDUOS 
+```{r}
+# puntos cerca a la diagonal
+plot(regG, 2)
+```
+
+#QUE NOS DICE EL SHAPIRO-WILK 
+```{r}
+shapiro.test(regG$residuals)
+```
+#VEMOS QUE NO HAY NORMALIDAD DE RESIDUOS 
+
+#NO MULTICONEALIDAD 
+```{r}
+library(DescTools)
+VIF(regG) # > 5 es problematico
+```
+#LA VARIABLE ESTADO DE DERECHO, IDENTIDAD Y RELACIONES Y SEGURIDAD Y DERECHO A LA VIDA SON MULTICOLINEALES 
+
+#VALORES INFLUYENTES 
+```{r}
+plot(regG, 5)
+```
+
+#RECUPEREMOS LOS CASOS INFLUYENTES 
+
+```{r}
+checkRegG=as.data.frame(influence.measures(regG)$is.inf)
+head(checkRegG)
+```
+#VEMOS QUE NO HAY CASOS INFLUYENTES 
+
+#PRESTEMOS ATENCION AL INDICE DE COOK Y LOS VALORES PREDECIDOS 
+```{r}
+checkRegG[checkRegG$cook.d | checkRegG$hat,]
+```
+#NUESTRO MODELO NO POSEE NINGUNO DE ELLOS 
+
+
+#HACEMOS LA CLUSTERIZACIÓN EN BASE A LAS VARIABLES INDEPENDIENTES DE NUETSRO MODELO G 
+```{r}
+library(stringr)
+library(magrittr)
+library(htmltab)
+library(factoextra)
+library(cluster)
+```
+
+#CALCULAMOS LAS DISTANCIAS 
+```{r}
+set.seed(2019)
+inputData=DEMOFREE[,c(2,37, 38, 39, 41)]
+g.dist = daisy(inputData, metric="gower")
+```
+
+#Aquí buscamos el número óptimo de clusters
+```{r}
+g.dist = daisy(inputData, metric="gower")
+fviz_nbclust(inputData, pam,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F)
+fviz_nbclust(inputData, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F)
+```
+
+#AHORA VEMOS LAS SILUETAS HECHAS A PARTIR DEL NUMERO OPTIMO DE CLUSTERS SUGERIDO PARA CADA FORMA DE CLUSTERIZACIÓN 
+```{r}
+res.pam = pam(g.dist,6,cluster.only = F)
+res.agnes = hcut(g.dist, k = 5,hc_func='agnes',hc_method = "ward.D")
+res.diana = hcut(g.dist, k = 5,hc_func='diana')
+```
+```{r}
+fviz_silhouette(res.pam)
+fviz_silhouette(res.agnes)
+fviz_silhouette(res.diana)
+```
+
+#VEMOS QUE LA TECNICA JERARQUICA AGLOMERATIVA ES LA OPTIMA PUES ES LA QUE TIENE MENOS SILUETAS NEGATIVAS
+
+#ENTONCES A PARTIR DE LA TECNICA JERARQUICA AGLOMERATIVA PROCEDEMOS A HACER EL DENDOGRAMA Y VER DE MANERA GRAFICA NUESTROS CLUSTERS 
+```{r}
+set.seed(2019)
+inputData$cluster=res.agnes$cluster
+fviz_dend(res.agnes, cex = 0.,horiz = T)
+```
+
+#VEMOS LAS OBSERVACIONES (PAISES) QUE PERTENECEN A CADA CLUSTER 
+
+```{r}
+iris[inputData$cluster==1,]
+iris[inputData$cluster==2,]
+iris[inputData$cluster==3,]
+iris[inputData$cluster==4,]
+iris[inputData$cluster==5,]
+```
+
+#SE BUSCA ELABORAR UN MAPA Y QUE ESTE SEA PINTADO SEGUN CADA CLUSTER REALIZADO
+#POR ELLO CREAMOS UNA DATA QUE SOLO CONTENGA LA INFORMACION DE LOS CLUSTERS PARA MERGEARLA CON EL MAPA 
+```{r}
+clusterC=inputData[,c(5,6)]
+clusterC[,c(1)]=NULL
+library(dplyr)
+clusterC <- tibble::rownames_to_column(clusterC, "VALUE")
+```
+#LLAMAMOS EL MAPA 
+```{r}
+library(sp)
+library(geojsonio)
+library(rgdal)
+
+GITH = "https://github.com/analourdes-roman/estadisticamagallanes/raw/master/Countries_WGS84%20(13).json"
+
+mapaMundo <- rgdal:: readOGR (GITH, stringsAsFactors=FALSE)
+plot(mapaMundo)
+
+```
+
+
+```{r}
+plot(mapaMundo, border='grey')
+```
+#OBSERVAMOS LOS PAISES QUE CONTIENE EL MAPA 
+```{r}
+head(mapaMundo@data)
+```
+
+```{r}
+sort(mapaMundo@data$CNTRY_NAME)
+```
+
+#MERGEAMOS LA DATA QUE CONTIENE LOS CLUSTERS -clusterC- CON EL MAPA  
+```{r}
+test=merge(mapaMundo, clusterC, by.x='CNTRY_NAME', by.y='VALUE')
+```
+
+```{r}
+test$CNTRY_NAME
+names(test)
+```
+
+#AHORA COLOREAMOS EL MAPA SEGUN LOS CLUSTERS 
+```{r}
+#colores 
+myColors=c('magenta','gold','green3', 'blue')
+plot (mapaMundo, col='grey', main ='MAPA')
+plot(test, col=myColors[test$cluster],add=T, border='white')
+```
+
